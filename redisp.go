@@ -17,10 +17,11 @@ import (
 )
 
 var (
-	flagH      bool
-	proxyAddr  string
-	sourceAddr string
-	targetAddr string
+	flagH       bool
+	proxyAddr   string
+	sourceAddr  string
+	targetAddr  string
+	limitMemory int
 
 	err error
 	mu  sync.RWMutex
@@ -31,6 +32,7 @@ func init() {
 	flag.StringVar(&proxyAddr, "p", "localhost:6379", "proxy addr")
 	flag.StringVar(&sourceAddr, "s", "source.com:6379", "source redis address")
 	flag.StringVar(&targetAddr, "t", "target.com:6379", "target redis address")
+	flag.IntVar(&limitMemory, "l", 0, "artificially limit the maximum memory")
 	flag.Usage = usage
 }
 
@@ -253,7 +255,7 @@ func parallelMigrate(sourceClient, targetClient redis.ClusterClient) {
 			Password: "", // no password set
 			DB:       0,  // use default DB
 		})
-		go log.Println("node", i, "addr:", i, addr)
+		go log.Println("node", i, "addr:", addr)
 		go migrate(sourceNodeClient, targetClient)
 	}
 }
@@ -283,8 +285,7 @@ func migrate(sourceClient *redis.Client, targetClient redis.ClusterClient) {
 		r, _ := regexp.Compile(".*used_memory:(.*).*")
 		used, _ := strconv.Atoi(strings.TrimSpace(strings.Split(r.FindString(val), ":")[1]))
 		go log.Println("info Memory:", used)
-		//  无数据或 目标 redis 使用量大于 0.35G
-		if cursor <= 0 || used > 375809638 {
+		if cursor <= 0 || (limitMemory > 0 && used > limitMemory) {
 			break
 		}
 	}
