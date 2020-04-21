@@ -53,7 +53,7 @@ func main() {
 
 	go log.Printf("started server at %s \nsource: %s\ntarget: %s\n", proxyAddr, sourceAddr, targetAddr)
 
-	go migrate(*sourceClient, *targetClient)
+	parallelMigrate(*sourceClient, *targetClient)
 
 	err = redcon.ListenAndServe(proxyAddr,
 		func(conn redcon.Conn, cmd redcon.Command) {
@@ -99,7 +99,6 @@ func main() {
 				}
 				conn.WriteString(string(val))
 			case "cluster":
-				log.Println("cluster cmd:", string(cmd.Args[0]), string(cmd.Args[1]))
 				if len(cmd.Args) != 2 {
 					conn.WriteError("ERR wrong number of arguments for '" + string(cmd.Args[0]) + "' command")
 					return
@@ -221,12 +220,12 @@ func main() {
 		},
 		func(conn redcon.Conn) bool {
 			// use this function to accept or deny the connection.
-			log.Printf("accept: %s", conn.RemoteAddr())
+			go log.Printf("accept: %s", conn.RemoteAddr())
 			return true
 		},
 		func(conn redcon.Conn, err error) {
 			// this is called when the connection has been closed
-			log.Printf("closed: %s, err: %v", conn.RemoteAddr(), err)
+			go log.Printf("closed: %s, err: %v", conn.RemoteAddr(), err)
 		},
 	)
 	if err != nil {
@@ -244,7 +243,22 @@ Options:
 	flag.PrintDefaults()
 }
 
-func migrate(sourceClient, targetClient redis.ClusterClient) {
+func parallelMigrate(sourceClient, targetClient redis.ClusterClient) {
+	nodes, _ := sourceClient.ClusterNodes().Result()
+	addrRegexp, _ := regexp.Compile(`((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})(\.((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})){3}:6379`)
+	addrs := addrRegexp.FindAllString(nodes, -1)
+	for i, addr := range addrs {
+		sourceNodeClient := redis.NewClient(&redis.Options{
+			Addr:     addr,
+			Password: "", // no password set
+			DB:       0,  // use default DB
+		})
+		go log.Println("node", i, "addr:", i, addr)
+		go migrate(sourceNodeClient, targetClient)
+	}
+}
+
+func migrate(sourceClient *redis.Client, targetClient redis.ClusterClient) {
 	var (
 		page   []string
 		cursor uint64
@@ -256,7 +270,7 @@ func migrate(sourceClient, targetClient redis.ClusterClient) {
 		if err != nil {
 			log.Println(err.Error())
 		}
-		log.Println("cursor:", cursor)
+		go log.Println("cursor:", cursor)
 		for _, key := range page {
 			mu.Lock()
 			val, _ := sourceClient.Get(key).Result()
@@ -268,7 +282,7 @@ func migrate(sourceClient, targetClient redis.ClusterClient) {
 		val, _ := targetClient.Info("Memory").Result()
 		r, _ := regexp.Compile(".*used_memory:(.*).*")
 		used, _ := strconv.Atoi(strings.TrimSpace(strings.Split(r.FindString(val), ":")[1]))
-		log.Println("info Memory:", used)
+		go log.Println("info Memory:", used)
 		//  无数据或 目标 redis 使用量大于 0.35G
 		if cursor <= 0 || used > 375809638 {
 			break
