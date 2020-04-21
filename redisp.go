@@ -59,14 +59,13 @@ func main() {
 
 	err = redcon.ListenAndServe(proxyAddr,
 		func(conn redcon.Conn, cmd redcon.Command) {
-			// TODO: 上线前调到 default 中
-			cmdStr := ""
-			for _, b := range cmd.Args {
-				cmdStr += " " + string(b)
-			}
-			go log.Println("cmd: ", cmdStr)
 			switch strings.ToLower(string(cmd.Args[0])) {
 			default:
+				cmdStr := ""
+				for _, b := range cmd.Args {
+					cmdStr += " " + string(b)
+				}
+				go log.Println("cmd: ", cmdStr)
 				conn.WriteError("ERR unknown command '" + cmdStr + "'")
 			case "detach":
 				hconn := conn.Detach()
