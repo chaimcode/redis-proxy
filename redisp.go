@@ -286,6 +286,7 @@ func migrate(sourceClient *redis.Client, targetClient redis.ClusterClient) {
 		used, _ := strconv.Atoi(strings.TrimSpace(strings.Split(r.FindString(val), ":")[1]))
 		go log.Println("info Memory:", used)
 		if cursor <= 0 || (limitMemory > 0 && used > limitMemory) {
+			go log.Println("congratulation, migrate done ...")
 			break
 		}
 	}
