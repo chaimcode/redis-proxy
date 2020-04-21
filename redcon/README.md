@@ -21,8 +21,9 @@ Features
 - Multithreaded
 
 Remark
-Redcon module reference https://github.com/tidwall/redcon
 ----------
+Redcon module reference https://github.com/tidwall/redcon
+
 
 Installing
 ----------
