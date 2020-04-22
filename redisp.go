@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"redisp/redcon"
@@ -24,7 +23,6 @@ var (
 	limitMemory int
 
 	err error
-	mu  sync.RWMutex
 )
 
 func init() {
@@ -53,9 +51,9 @@ func main() {
 		Password: "", // no password set
 	})
 
-	go log.Printf("started server at %s \nsource: %s\ntarget: %s\n", proxyAddr, sourceAddr, targetAddr)
+	log.Printf("started server at %s \nsource: %s\ntarget: %s\n", proxyAddr, sourceAddr, targetAddr)
 
-	parallelMigrate(*sourceClient, *targetClient)
+	clusterMigrate(sourceClient, targetClient)
 
 	err = redcon.ListenAndServe(proxyAddr,
 		func(conn redcon.Conn, cmd redcon.Command) {
@@ -65,7 +63,7 @@ func main() {
 				for _, b := range cmd.Args {
 					cmdStr += " " + string(b)
 				}
-				go log.Println("cmd: ", cmdStr)
+				log.Println("cmd: ", cmdStr)
 				conn.WriteError("ERR unknown command '" + cmdStr + "'")
 			case "detach":
 				hconn := conn.Detach()
@@ -131,13 +129,11 @@ func main() {
 					conn.WriteError("ERR wrong number of arguments for '" + string(cmd.Args[0]) + "' command")
 					return
 				}
-				mu.Lock()
 				key, val, duration := string(cmd.Args[1]), cmd.Args[2], 0*time.Second
 				err = sourceClient.Set(key, val, duration).Err()
 				if err == nil {
 					err = targetClient.Set(key, val, duration).Err()
 				}
-				mu.Unlock()
 				if err != nil {
 					conn.WriteNull()
 					return
@@ -148,7 +144,6 @@ func main() {
 					conn.WriteError("ERR wrong number of arguments for '" + string(cmd.Args[0]) + "' command")
 					return
 				}
-				mu.RLock()
 				key := string(cmd.Args[1])
 				val, ok := targetClient.Get(key).Result()
 				if val == "" {
@@ -157,7 +152,6 @@ func main() {
 					targetClient.Set(key, val, duration)
 
 				}
-				mu.RUnlock()
 				if ok != nil {
 					conn.WriteNull()
 					return
@@ -168,11 +162,9 @@ func main() {
 					conn.WriteError("ERR wrong number of arguments for '" + string(cmd.Args[0]) + "' command")
 					return
 				}
-				mu.Lock()
 				key := string(cmd.Args[1])
 				val, ok := sourceClient.Del(key).Result()
 				targetClient.Del(key).Result()
-				mu.Unlock()
 				if ok != nil {
 					conn.WriteError(ok.Error())
 					return
@@ -183,7 +175,6 @@ func main() {
 					conn.WriteError("ERR wrong number of arguments for '" + string(cmd.Args[0]) + "' command")
 					return
 				}
-				mu.Lock()
 				key := string(cmd.Args[1])
 				durationInt, err := strconv.Atoi(string(cmd.Args[2]))
 				if err != nil {
@@ -193,7 +184,6 @@ func main() {
 				duration := time.Duration(time.Duration(durationInt) * time.Second)
 				val, ok := sourceClient.Expire(key, duration).Result()
 				targetClient.Expire(key, duration).Result()
-				mu.Unlock()
 				if ok != nil {
 					conn.WriteNull()
 					return
@@ -208,10 +198,8 @@ func main() {
 					conn.WriteError("ERR wrong number of arguments for '" + string(cmd.Args[0]) + "' command")
 					return
 				}
-				mu.Lock()
 				key := string(cmd.Args[1])
 				val, ok := sourceClient.Exists(key).Result()
-				mu.Unlock()
 				if ok != nil {
 					conn.WriteNull()
 					return
@@ -244,7 +232,7 @@ Options:
 	flag.PrintDefaults()
 }
 
-func parallelMigrate(sourceClient, targetClient redis.ClusterClient) {
+func clusterMigrate(sourceClient, targetClient *redis.ClusterClient) {
 	nodes, _ := sourceClient.ClusterNodes().Result()
 	addrRegexp, _ := regexp.Compile(`((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})(\.((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})){3}:\d{4,5}`)
 	addrs := addrRegexp.FindAllString(nodes, -1)
@@ -254,12 +242,12 @@ func parallelMigrate(sourceClient, targetClient redis.ClusterClient) {
 			Password: "", // no password set
 			DB:       0,  // use default DB
 		})
-		go log.Println("node", i, "addr:", addr)
-		go migrate(sourceNodeClient, targetClient)
+		log.Println("node", i, "addr:", addr)
+		go nodeMigrate(sourceNodeClient, targetClient)
 	}
 }
 
-func migrate(sourceClient *redis.Client, targetClient redis.ClusterClient) {
+func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) {
 	var (
 		page   []string
 		cursor uint64
@@ -271,21 +259,19 @@ func migrate(sourceClient *redis.Client, targetClient redis.ClusterClient) {
 		if err != nil {
 			log.Println(err.Error())
 		}
-		go log.Println("cursor:", cursor)
+		log.Println("cursor:", cursor)
 		for _, key := range page {
-			mu.Lock()
 			val, _ := sourceClient.Get(key).Result()
 			duration, _ := sourceClient.TTL(key).Result()
 			targetClient.Set(key, val, duration)
-			mu.Unlock()
 
 		}
 		val, _ := targetClient.Info("Memory").Result()
 		r, _ := regexp.Compile(".*used_memory:(.*).*")
 		used, _ := strconv.Atoi(strings.TrimSpace(strings.Split(r.FindString(val), ":")[1]))
-		go log.Println("info Memory:", used)
+		log.Println("info Memory:", used)
 		if cursor <= 0 || (limitMemory > 0 && used > limitMemory) {
-			go log.Println("congratulation, migrate done ...")
+			log.Println("congratulation, migrate done ...")
 			break
 		}
 	}
