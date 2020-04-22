@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"net/http"
+	_ "net/http/pprof"
 	"redisp/redcon"
 
 	"github.com/go-redis/redis"
@@ -41,7 +43,7 @@ func main() {
 		flag.Usage()
 		return
 	}
-
+	http.ListenAndServe(":8080", nil)
 	sourceClient := redis.NewClusterClient(&redis.ClusterOptions{
 		Addrs:    []string{sourceAddr},
 		Password: "", // no password set
