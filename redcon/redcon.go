@@ -113,7 +113,7 @@ func NewServer(addr string,
 	handler func(conn Conn, cmd Command),
 	accept func(conn Conn) bool,
 	closed func(conn Conn, err error),
-) *Server {
+) *ReusableServer {
 	return NewServerNetwork("tcp", addr, handler, accept, closed)
 }
 
@@ -134,7 +134,7 @@ func NewServerNetwork(
 	handler func(conn Conn, cmd Command),
 	accept func(conn Conn) bool,
 	closed func(conn Conn, err error),
-) *Server {
+) *ReusableServer {
 	if handler == nil {
 		panic("handler is nil")
 	}
@@ -146,7 +146,11 @@ func NewServerNetwork(
 		closed:  closed,
 		conns:   make(map[*conn]bool),
 	}
-	return s
+	rs := &ReusableServer{
+		conns:  make(map[*conn]int),
+		Server: s,
+	}
+	return rs
 }
 
 // NewServerNetworkTLS returns a new TLS Redcon server. The network net must be
@@ -549,6 +553,12 @@ type Server struct {
 
 	// AcceptError is an optional function used to handle Accept errors.
 	AcceptError func(err error)
+}
+
+// ReusableServer define service can be reused
+type ReusableServer struct {
+	*Server
+	conns map[*conn]int
 }
 
 // TLSServer defines a server for clients for managing client connections.
