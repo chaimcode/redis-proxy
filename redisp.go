@@ -29,9 +29,9 @@ var (
 
 func init() {
 	flag.BoolVar(&flagH, "h", false, "this help")
-	flag.StringVar(&proxyAddr, "p", "localhost:6379", "proxy addr")
-	flag.StringVar(&sourceAddr, "s", "source.com:6379", "source redis address")
-	flag.StringVar(&targetAddr, "t", "target.com:6379", "target redis address")
+	flag.StringVar(&proxyAddr, "p", "localhost:6380", "proxy addr")
+	flag.StringVar(&sourceAddr, "s", "localhost:6379", "source redis address")
+	flag.StringVar(&targetAddr, "t", "localhost:6379", "target redis address")
 	flag.IntVar(&limitMemory, "l", 0, "artificially limit the maximum memory")
 	flag.Usage = usage
 }
