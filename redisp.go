@@ -43,7 +43,10 @@ func main() {
 		flag.Usage()
 		return
 	}
-	http.ListenAndServe(":8080", nil)
+
+	go http.ListenAndServe(":8080", nil)
+	log.Println("start pprof server ...")
+
 	sourceClient := redis.NewClusterClient(&redis.ClusterOptions{
 		Addrs:    []string{sourceAddr},
 		Password: "", // no password set
