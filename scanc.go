@@ -89,6 +89,7 @@ func clusterMigrate(sourceClient, targetClient *redis.ClusterClient) {
 				}
 				log.Println("cursor:", cursor)
 				pageChan <- page
+				break
 				if cursor <= 0 {
 					break
 				}
