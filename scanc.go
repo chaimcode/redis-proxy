@@ -72,9 +72,52 @@ func clusterMigrate(sourceClient, targetClient *redis.ClusterClient) {
 		})
 		log.Println("node", i, "addr:", addr)
 		wg.Add(1)
-		go nodeMigrate(sourceNodeClient, targetClient)
+
+		go func() {
+			var (
+				page   []string
+				cursor uint64
+				err    error
+				wg     sync.WaitGroup
+			)
+			cursor = 0
+			pageChan := make(chan []string, 300000)
+			for {
+				page, cursor, err = sourceNodeClient.Scan(cursor, "*", 1000).Result()
+				if err != nil {
+					log.Println(err.Error())
+				}
+				log.Println("cursor:", cursor)
+				pageChan <- page
+				if cursor <= 0 {
+					break
+				}
+			}
+
+			go func() {
+				wg.Add(1)
+				page := <-pageChan
+				for _, key := range page {
+					log.Println("key", key)
+
+					val, ok := sourceNodeClient.Get(key).Result()
+					if ok != nil {
+						continue
+					}
+					duration, _ := sourceNodeClient.TTL(key).Result()
+					targetClient.Set(key, val, duration)
+				}
+				defer wg.Done()
+			}()
+
+			defer close(pageChan)
+			defer wg.Done()
+		}()
+
 	}
+
 	wg.Wait()
+	log.Println("congratulation, migrate done ...")
 }
 
 func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) {
