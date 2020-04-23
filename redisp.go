@@ -68,11 +68,11 @@ func main() {
 				for cmd := range cmdQueue {
 					key, val, duration := string(cmd.Args[1]), cmd.Args[2], 0*time.Second
 					err := sourceClient.Set(key, val, duration).Err()
-					if err == nil {
-						err = targetClient.Set(key, val, duration).Err()
-					}
+					// if err == nil {
+					// 	err = targetClient.Set(key, val, duration).Err()
+					// }
 					if err != nil {
-						log.Printf("targetClient Set key: %s value: %s failed, err: %s", key, val, err)
+						log.Printf("Set key: %s value: %s failed, err: %s", key, val, err)
 					}
 				}
 			}()
