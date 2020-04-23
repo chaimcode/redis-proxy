@@ -82,7 +82,6 @@ func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) 
 		page   []string
 		cursor uint64
 		err    error
-		wg     sync.WaitGroup
 	)
 	cursor = 0
 	pageChan := make(chan []string, 300000)
@@ -92,16 +91,9 @@ func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) 
 			log.Println(err.Error())
 		}
 		log.Println("cursor:", cursor)
-		pageChan <- page
-		if cursor <= 0 {
-			break
-		}
-	}
-
-	go func() {
-		wg.Add(1)
-		page := <-pageChan
 		for _, key := range page {
+			log.Println("key", key)
+
 			val, ok := sourceClient.Get(key).Result()
 			if ok != nil {
 				continue
@@ -109,11 +101,14 @@ func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) 
 			duration, _ := sourceClient.TTL(key).Result()
 			targetClient.Set(key, val, duration)
 		}
-	}()
 
-	wg.Wait()
+		break
 
-	log.Println("congratulation, migrate done ...")
+		if cursor <= 0 {
+			log.Println("congratulation, migrate done ...")
+			break
+		}
+	}
 
 	defer close(pageChan)
 }
