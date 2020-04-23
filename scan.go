@@ -60,12 +60,10 @@ Options:
 }
 
 func clusterMigrate(sourceClient, targetClient *redis.ClusterClient) {
-	var wg sync.WaitGroup
 	nodes, _ := sourceClient.ClusterNodes().Result()
 	addrRegexp, _ := regexp.Compile(`((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})(\.((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})){3}:\d{4,5}`)
 	addrs := addrRegexp.FindAllString(nodes, -1)
 	for i, addr := range addrs {
-		wg.Add(1)
 		sourceNodeClient := redis.NewClient(&redis.Options{
 			Addr:     addr,
 			Password: "", // no password set
@@ -73,7 +71,6 @@ func clusterMigrate(sourceClient, targetClient *redis.ClusterClient) {
 		})
 		log.Println("node", i, "addr:", addr)
 		go nodeMigrate(sourceNodeClient, targetClient)
-		wg.Wait()
 	}
 }
 
@@ -82,6 +79,7 @@ func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) 
 		page   []string
 		cursor uint64
 		err    error
+		wg     sync.WaitGroup
 	)
 	cursor = 0
 	pageChan := make(chan []string, 300000)
@@ -93,7 +91,6 @@ func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) 
 		log.Println("cursor:", cursor)
 		pageChan <- page
 		if cursor <= 0 {
-			log.Println("congratulation, migrate done ...")
 			break
 		}
 	}
@@ -107,9 +104,13 @@ func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) 
 			}
 			duration, _ := sourceClient.TTL(key).Result()
 			targetClient.Set(key, val, duration)
-
 		}
+		wg.Add(1)
 	}()
+
+	wg.Wait()
+
+	log.Println("congratulation, migrate done ...")
 
 	defer close(pageChan)
 }
