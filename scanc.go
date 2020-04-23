@@ -120,45 +120,45 @@ func clusterMigrate(sourceClient, targetClient *redis.ClusterClient) {
 	log.Println("congratulation, migrate done ...")
 }
 
-func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) {
-	var (
-		page   []string
-		cursor uint64
-		err    error
-		wg     sync.WaitGroup
-	)
-	cursor = 0
-	pageChan := make(chan []string, 300000)
-	for {
-		page, cursor, err = sourceClient.Scan(cursor, "*", 1000).Result()
-		if err != nil {
-			log.Println(err.Error())
-		}
-		log.Println("cursor:", cursor)
-		pageChan <- page
-		if cursor <= 0 {
-			break
-		}
-	}
+// func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) {
+// 	var (
+// 		page   []string
+// 		cursor uint64
+// 		err    error
+// 		wg     sync.WaitGroup
+// 	)
+// 	cursor = 0
+// 	pageChan := make(chan []string, 300000)
+// 	for {
+// 		page, cursor, err = sourceClient.Scan(cursor, "*", 1000).Result()
+// 		if err != nil {
+// 			log.Println(err.Error())
+// 		}
+// 		log.Println("cursor:", cursor)
+// 		pageChan <- page
+// 		if cursor <= 0 {
+// 			break
+// 		}
+// 	}
 
-	go func() {
-		wg.Add(1)
-		page := <-pageChan
-		for _, key := range page {
-			log.Println("key", key)
+// 	go func() {
+// 		wg.Add(1)
+// 		page := <-pageChan
+// 		for _, key := range page {
+// 			log.Println("key", key)
 
-			val, ok := sourceClient.Get(key).Result()
-			if ok != nil {
-				continue
-			}
-			duration, _ := sourceClient.TTL(key).Result()
-			targetClient.Set(key, val, duration)
-		}
-	}()
+// 			val, ok := sourceClient.Get(key).Result()
+// 			if ok != nil {
+// 				continue
+// 			}
+// 			duration, _ := sourceClient.TTL(key).Result()
+// 			targetClient.Set(key, val, duration)
+// 		}
+// 	}()
 
-	wg.Wait()
+// 	wg.Wait()
 
-	log.Println("congratulation, migrate done ...")
+// 	log.Println("congratulation, migrate done ...")
 
-	defer close(pageChan)
-}
+// 	defer close(pageChan)
+// }
