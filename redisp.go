@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"net/http"
@@ -57,6 +58,24 @@ func main() {
 	})
 
 	log.Printf("started server at %s \nsource: %s\ntarget: %s\n", proxyAddr, sourceAddr, targetAddr)
+
+	var wg sync.WaitGroup
+	cmdQueue := make(chan redcon.Command, 300000)
+	go func() {
+		for i := 0; i <= 3000; i++ {
+			wg.Add(1)
+			go func() {
+				for cmd := range cmdQueue {
+					key, val, duration := string(cmd.Args[1]), cmd.Args[2], 0*time.Second
+					err := targetClient.Set(key, val, duration).Err()
+					if err != nil {
+						log.Printf("targetClient Set key: %s value: %s failed, err: %s", key, val, err)
+					}
+				}
+			}()
+		}
+		wg.Wait()
+	}()
 
 	clusterMigrate(sourceClient, targetClient)
 
@@ -134,6 +153,7 @@ func main() {
 					conn.WriteError("ERR wrong number of arguments for '" + string(cmd.Args[0]) + "' command")
 					return
 				}
+				cmdQueue <- cmd
 				key, val, duration := string(cmd.Args[1]), cmd.Args[2], 0*time.Second
 				err = sourceClient.Set(key, val, duration).Err()
 				// if err == nil {

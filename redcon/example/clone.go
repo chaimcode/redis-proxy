@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"redcon"
+	"redisp/redcon"
 )
 
 var addr = ":6380"
