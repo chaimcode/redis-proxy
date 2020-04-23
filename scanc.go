@@ -60,6 +60,7 @@ Options:
 }
 
 func clusterMigrate(sourceClient, targetClient *redis.ClusterClient) {
+	var wg sync.WaitGroup
 	nodes, _ := sourceClient.ClusterNodes().Result()
 	addrRegexp, _ := regexp.Compile(`((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})(\.((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})){3}:\d{4,5}`)
 	addrs := addrRegexp.FindAllString(nodes, -1)
@@ -70,8 +71,10 @@ func clusterMigrate(sourceClient, targetClient *redis.ClusterClient) {
 			DB:       0,  // use default DB
 		})
 		log.Println("node", i, "addr:", addr)
+		wg.Add(1)
 		go nodeMigrate(sourceNodeClient, targetClient)
 	}
+	wg.Wait()
 }
 
 func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) {
@@ -81,7 +84,6 @@ func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) 
 		err    error
 		wg     sync.WaitGroup
 	)
-	wg.Add(1)
 	cursor = 0
 	pageChan := make(chan []string, 300000)
 	for {
@@ -90,6 +92,15 @@ func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) 
 			log.Println(err.Error())
 		}
 		log.Println("cursor:", cursor)
+		pageChan <- page
+		if cursor <= 0 {
+			break
+		}
+	}
+
+	go func() {
+		wg.Add(1)
+		page := <-pageChan
 		for _, key := range page {
 			log.Println("key", key)
 
@@ -100,17 +111,11 @@ func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) 
 			duration, _ := sourceClient.TTL(key).Result()
 			targetClient.Set(key, val, duration)
 		}
-
-		log.Println("congratulation, migrate done ...")
-		break
-
-		if cursor <= 0 {
-			log.Println("congratulation, migrate done ...")
-			break
-		}
-	}
-
-	defer close(pageChan)
+	}()
 
 	wg.Wait()
+
+	log.Println("congratulation, migrate done ...")
+
+	defer close(pageChan)
 }
