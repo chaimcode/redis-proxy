@@ -166,7 +166,7 @@ func main() {
 				// 	conn.WriteNull()
 				// 	return
 				// }
-				conn.WriteString("OK")
+				go conn.WriteString("OK")
 			case "get":
 				if len(cmd.Args) != 2 {
 					conn.WriteError("ERR wrong number of arguments for '" + string(cmd.Args[0]) + "' command")
