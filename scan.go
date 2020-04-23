@@ -84,12 +84,22 @@ func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) 
 		err    error
 	)
 	cursor = 0
+	pageChan := make(chan []string, 300000)
 	for {
 		page, cursor, err = sourceClient.Scan(cursor, "*", 1000).Result()
 		if err != nil {
 			log.Println(err.Error())
 		}
 		log.Println("cursor:", cursor)
+		pageChan <- page
+		if cursor <= 0 {
+			log.Println("congratulation, migrate done ...")
+			break
+		}
+	}
+
+	go func() {
+		page := <-pageChan
 		for _, key := range page {
 			val, ok := sourceClient.Get(key).Result()
 			if ok != nil {
@@ -99,9 +109,7 @@ func nodeMigrate(sourceClient *redis.Client, targetClient *redis.ClusterClient) 
 			targetClient.Set(key, val, duration)
 
 		}
-		if cursor <= 0 {
-			log.Println("congratulation, migrate done ...")
-			break
-		}
-	}
+	}()
+
+	defer close(pageChan)
 }
