@@ -105,7 +105,6 @@ func clusterMigrate(sourceClient, targetClient *redis.ClusterClient) {
 
 			defer wg.Done()
 		}()
-		wg.Wait()
 	}
-
+	wg.Wait()
 }
