@@ -67,7 +67,10 @@ func main() {
 			go func() {
 				for cmd := range cmdQueue {
 					key, val, duration := string(cmd.Args[1]), cmd.Args[2], 0*time.Second
-					err := targetClient.Set(key, val, duration).Err()
+					err := sourceClient.Set(key, val, duration).Err()
+					if err == nil {
+						err = targetClient.Set(key, val, duration).Err()
+					}
 					if err != nil {
 						log.Printf("targetClient Set key: %s value: %s failed, err: %s", key, val, err)
 					}
@@ -154,15 +157,15 @@ func main() {
 					return
 				}
 				cmdQueue <- cmd
-				key, val, duration := string(cmd.Args[1]), cmd.Args[2], 0*time.Second
-				err = sourceClient.Set(key, val, duration).Err()
+				// key, val, duration := string(cmd.Args[1]), cmd.Args[2], 0*time.Second
+				// err = sourceClient.Set(key, val, duration).Err()
 				// if err == nil {
 				// 	err = targetClient.Set(key, val, duration).Err()
 				// }
-				if err != nil {
-					conn.WriteNull()
-					return
-				}
+				// if err != nil {
+				// 	conn.WriteNull()
+				// 	return
+				// }
 				conn.WriteString("OK")
 			case "get":
 				if len(cmd.Args) != 2 {
