@@ -87,7 +87,7 @@ func clusterMigrate(sourceClient, targetClient *redis.ClusterClient) {
 				if err != nil {
 					log.Println(err.Error())
 				}
-				log.Println("cursor:", cursor)
+				log.Println("addr", addr, "cursor:", cursor)
 				for _, key := range page {
 					val, ok := sourceNodeClient.Get(key).Result()
 					if ok != nil {
