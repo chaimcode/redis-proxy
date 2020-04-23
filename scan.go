@@ -64,6 +64,7 @@ func clusterMigrate(sourceClient, targetClient *redis.ClusterClient) {
 	nodes, _ := sourceClient.ClusterNodes().Result()
 	addrRegexp, _ := regexp.Compile(`((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})(\.((2(5[0-5]|[0-4]\d))|[0-1]?\d{1,2})){3}:\d{4,5}`)
 	addrs := addrRegexp.FindAllString(nodes, -1)
+	log.Println("addrs", addrs)
 	for i, addr := range addrs {
 		sourceNodeClient := redis.NewClient(&redis.Options{
 			Addr:     addr,
